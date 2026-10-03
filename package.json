@@ -1,0 +1,15 @@
+{
+  "name": "geolocation-consent-demo",
+  "version": "1.0.0",
+  "description": "Internal educational geolocation demo with explicit user consent and SSE realtime streaming",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cloudflared": "^0.7.3",
+    "express": "^4.19.2",
+    "localtunnel": "^2.0.2",
+    "qrcode": "^1.5.4"
+  }
+}

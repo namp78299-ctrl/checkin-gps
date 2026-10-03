@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cổng Check-in Sự Kiện</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container card-wrapper">
+    <div class="card" id="main-card">
+      <div id="checkin-form-container">
+        <h1>Check-in Sự Kiện</h1>
+        <p class="card-desc">Vui lòng nhập thông tin để xác thực tham dự sự kiện tại hội trường.</p>
+
+        <div class="notice-box">
+          <strong>Lưu ý xác thực:</strong> Hệ thống yêu cầu xác minh vị trí GPS thực tế tại địa điểm tổ chức. Vui lòng bấm <em>"Cho phép"</em> khi trình duyệt hỏi quyền vị trí.
+        </div>
+
+        <form id="checkin-form">
+          <div class="form-group">
+            <label class="form-label" for="attendee-name">Họ và tên <span style="color: #ef4444">*</span></label>
+            <input type="text" id="attendee-name" class="form-control" placeholder="Ví dụ: Nguyễn Văn A" required autocomplete="name">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="attendee-code">Mã vé / Số điện thoại</label>
+            <input type="text" id="attendee-code" class="form-control" placeholder="Ví dụ: VIP-102 hoặc 0901234567" autocomplete="off">
+          </div>
+
+          <button id="btn-checkin" class="btn-primary" type="submit">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span>Xác nhận Check-in</span>
+          </button>
+        </form>
+
+        <div id="status-box" class="status-box" role="status" aria-live="polite"></div>
+      </div>
+
+      <!-- Khung hiển thị khi check-in thành công (Không để lộ tọa độ kỹ thuật) -->
+      <div id="success-container" style="display: none; text-align: center; padding: 12px 0;">
+        <div style="font-size: 3.5rem; margin-bottom: 12px;">🎉</div>
+        <h2 style="color: #6ee7b7; font-size: 1.5rem; margin-bottom: 8px;">Check-in Thành Công!</h2>
+        <p id="success-welcome" style="font-size: 1.05rem; color: #f8fafc; margin-bottom: 12px;"></p>
+        <p id="success-time" style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 24px;"></p>
+        
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 16px; border-radius: 8px; font-size: 0.9rem; color: #a7f3d0;">
+          Vị trí và thông tin tham dự của bạn đã được ghi nhận trên hệ thống ban tổ chức. Chúc bạn có trải nghiệm sự kiện tuyệt vời!
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const form = document.getElementById('checkin-form');
+      const nameInput = document.getElementById('attendee-name');
+      const codeInput = document.getElementById('attendee-code');
+      const submitBtn = document.getElementById('btn-checkin');
+      const statusBox = document.getElementById('status-box');
+      const formContainer = document.getElementById('checkin-form-container');
+      const successContainer = document.getElementById('success-container');
+      const successWelcome = document.getElementById('success-welcome');
+      const successTime = document.getElementById('success-time');
+
+      function updateStatus(message, type) {
+        statusBox.className = 'status-box show ' + type;
+        statusBox.innerHTML = message;
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const name = nameInput.value.trim();
+        const code = codeInput.value.trim();
+
+        if (!name) {
+          updateStatus('Vui lòng nhập họ và tên của bạn.', 'error');
+          nameInput.focus();
+          return;
+        }
+
+        if (!('geolocation' in navigator)) {
+          updateStatus('Trình duyệt không hỗ trợ định vị GPS.', 'error');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        updateStatus('Đang xác thực vị trí GPS... Vui lòng bấm "Cho phép" trên hộp thoại trình duyệt.', 'info');
+
+        const options = {
+          enableHighAccuracy: true, // Lấy vị trí GPS chính xác cao
+          timeout: 10000,
+          maximumAge: 0
+        };
+
+        navigator.geolocation.getCurrentPosition(
+          // Người dùng bấm Cho phép
+          async function (position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+
+            updateStatus('Đang gửi xác nhận check-in lên hệ thống...', 'info');
+
+            try {
+              const res = await fetch('/api/location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: name,
+                  code: code,
+                  lat: lat,
+                  lng: lng,
+                  accuracy: accuracy,
+                  ua: navigator.userAgent,
+                  ts: Date.now()
+                })
+              });
+
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Lỗi kết nối máy chủ.');
+              }
+
+              // Ẩn form nhập và hiển thị màn hình chúc mừng (KHÔNG in tọa độ lat/lng ra cho người dùng)
+              formContainer.style.display = 'none';
+              successContainer.style.display = 'block';
+              successWelcome.textContent = 'Chào mừng ' + name + (code ? ' (' + code + ')' : '') + ' đã có mặt!';
+              successTime.textContent = 'Thời gian ghi nhận: ' + new Date().toLocaleTimeString('vi-VN') + ' - ' + new Date().toLocaleDateString('vi-VN');
+
+            } catch (err) {
+              submitBtn.disabled = false;
+              updateStatus('❌ ' + err.message, 'error');
+            }
+          },
+          // Người dùng từ chối hoặc lỗi GPS
+          function (error) {
+            submitBtn.disabled = false;
+            let message = '';
+
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                message = '❌ <strong>Yêu cầu bị từ chối:</strong> Bạn đã không cho phép chia sẻ vị trí. Không thể hoàn tất thủ tục check-in.';
+                break;
+              case error.POSITION_UNAVAILABLE:
+                message = '❌ <strong>Không khả dụng:</strong> Thiết bị không nhận được tín hiệu GPS. Vui lòng bật dịch vụ định vị (Location Services) trên điện thoại.';
+                break;
+              case error.TIMEOUT:
+                message = '❌ <strong>Hết thời gian:</strong> Quá hạn 10 giây chờ bắt sóng GPS. Vui lòng thử lại.';
+                break;
+              default:
+                message = '❌ <strong>Lỗi:</strong> ' + (error.message || 'Mã lỗi: ' + error.code);
+            }
+
+            updateStatus(message, 'error');
+          },
+          options
+        );
+      });
+    })();
+  </script>
+</body>
+</html>
