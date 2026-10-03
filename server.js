@@ -25,7 +25,7 @@ let publicUrl = null;
 
 // Endpoint lấy link public hiện tại
 app.get('/api/public-url', (req, res) => {
-  if (process.env.RENDER) {
+  if (process.env.RENDER || process.platform !== 'win32') {
     const proto = req.headers['x-forwarded-proto'] || 'https';
     return res.json({ url: `${proto}://${req.get('host')}` });
   }
@@ -62,9 +62,9 @@ const server = app.listen(PORT, async () => {
   console.log(`[INFO] Server running at port ${PORT}`);
   console.log(`[INFO] Trang quản trị (Admin): http://localhost:${PORT}/admin`);
 
-  // Nếu đang deploy trên Cloud (Render, Railway...) thì đã có sẵn HTTPS vĩnh viễn, không cần chạy Cloudflare
-  if (process.env.RENDER) {
-    console.log('[INFO] Đang chạy trên Cloud Render.com (Đã có sẵn HTTPS vĩnh viễn 24/7).');
+  // Nếu đang deploy trên Cloud (Render, Railway...) hoặc Linux thì đã có sẵn HTTPS vĩnh viễn, không chạy Cloudflare exe
+  if (process.env.RENDER || process.platform !== 'win32') {
+    console.log('[INFO] Đang chạy trên Cloud (Đã có sẵn HTTPS vĩnh viễn 24/7).');
     return;
   }
 
