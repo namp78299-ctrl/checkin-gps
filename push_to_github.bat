@@ -1,41 +1,35 @@
 @echo off
 chcp 65001 >nul
-title Đẩy Code Lên GitHub Tự Động
+title Đẩy Code Lên GitHub
 cd /d "%~dp0"
 
 echo ========================================================
-echo          ĐẨY CODE TỪ MÁY LÊN GITHUB ĐỂ DEPLOY RENDER
+echo       ĐANG ĐẨY CODE LÊN GITHUB: checkin-gps
 echo ========================================================
 echo.
-echo Bước này sẽ đưa toàn bộ mã nguồn lên tài khoản GitHub của bạn.
-echo.
-set /p REPO_URL="Dán đường link GitHub Repository của bạn vào đây: "
 
-if "%REPO_URL%"=="" (
-    echo [LỖI] Bạn chưa nhập đường link GitHub!
-    pause
-    exit /b 1
-)
-
-echo.
-echo [1/4] Khởi tạo Git...
-git init
-
-echo [2/4] Đóng gói các file mã nguồn...
+echo [1/3] Đóng gói các file mã nguồn...
 git add .
-git commit -m "Deploy checkin app to Render"
+git commit -m "Deploy checkin app to Render" 2>nul
 
-echo [3/4] Cấu hình nhánh main...
+echo [2/3] Cấu hình remote GitHub...
 git branch -M main
-
-echo [4/4] Đẩy code lên GitHub...
 git remote remove origin 2>nul
-git remote add origin %REPO_URL%
+git remote add origin https://github.com/namp78299-ctrl/checkin-gps.git
+
+echo [3/3] Đang tải code lên GitHub (vui lòng bấm 'Sign in' nếu có popup)...
 git push -u origin main
 
 echo.
 echo ========================================================
-echo  THÀNH CÔNG! Toàn bộ code đã được tải lên GitHub.
-echo  Bây giờ bạn dán link đó vào ô Render là xong!
-echo ========================================================
+if %errorlevel% equ 0 (
+    echo  THÀNH CÔNG! Code đã được tải lên GitHub hoàn tất.
+    echo  Bây giờ bạn dán link sau vào trang Render:
+    echo.
+    echo  https://github.com/namp78299-ctrl/checkin-gps
+    echo ========================================================
+) else (
+    echo  [LƯU Ý] Nếu chưa đăng nhập GitHub, vui lòng đăng nhập trên popup trình duyệt và thử lại.
+    echo ========================================================
+)
 pause
