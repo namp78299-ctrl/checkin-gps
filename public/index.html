@@ -140,19 +140,36 @@
 
             switch (error.code) {
               case error.PERMISSION_DENIED:
-                message = '❌ <strong>Yêu cầu bị từ chối:</strong> Bạn đã không cho phép chia sẻ vị trí. Không thể hoàn tất thủ tục check-in.';
+                message = 
+                  '⚠️ <strong>Quyền vị trí đang bị tắt/chặn:</strong><br>' +
+                  '<span style="font-size: 0.88rem; color: #fecaca;">Để hoàn tất check-in, vui lòng cấp lại quyền theo hướng dẫn bên dưới rồi bấm thử lại:</span>' +
+                  '<div style="margin-top: 10px; font-size: 0.82rem; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: left; line-height: 1.5; color: #f1f5f9;">' +
+                    '🍎 <strong>Trên iPhone (Safari):</strong> Bấm vào biểu tượng <strong>aA</strong> (hoặc ổ khóa) ở góc trái thanh địa chỉ ➜ chọn <em>Cài đặt trang web</em> ➜ <em>Vị trí</em> ➜ chọn <strong>Hỏi</strong> hoặc <strong>Cho phép</strong>.<br><br>' +
+                    '🤖 <strong>Trên Android (Chrome):</strong> Bấm vào biểu tượng <strong>ổ khóa / cài đặt</strong> cạnh thanh địa chỉ ➜ chọn <em>Quyền</em> ➜ bật <strong>Vị trí</strong> sang <em>Cho phép</em>.' +
+                  '</div>' +
+                  '<div style="margin-top: 10px;">' +
+                    '<button type="button" id="btn-retry-locate" style="background: #3b82f6; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 600;">🔄 Thử lại ngay</button>' +
+                  '</div>';
                 break;
               case error.POSITION_UNAVAILABLE:
-                message = '❌ <strong>Không khả dụng:</strong> Thiết bị không nhận được tín hiệu GPS. Vui lòng bật dịch vụ định vị (Location Services) trên điện thoại.';
+                message = '❌ <strong>Không khả dụng:</strong> Thiết bị không nhận được tín hiệu GPS. Vui lòng kiểm tra lại dịch vụ định vị (Location Services) trên máy.';
                 break;
               case error.TIMEOUT:
-                message = '❌ <strong>Hết thời gian:</strong> Quá hạn 10 giây chờ bắt sóng GPS. Vui lòng thử lại.';
+                message = '❌ <strong>Hết thời gian:</strong> Quá hạn 10 giây chờ bắt sóng GPS. Vui lòng bấm thử lại.';
                 break;
               default:
                 message = '❌ <strong>Lỗi:</strong> ' + (error.message || 'Mã lỗi: ' + error.code);
             }
 
             updateStatus(message, 'error');
+
+            // Gắn sự kiện cho nút Thử lại ngay nếu có
+            const retryBtn = document.getElementById('btn-retry-locate');
+            if (retryBtn) {
+              retryBtn.addEventListener('click', function () {
+                form.dispatchEvent(new Event('submit', { cancelable: true }));
+              });
+            }
           },
           options
         );
