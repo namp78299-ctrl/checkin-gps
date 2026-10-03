@@ -33,20 +33,21 @@
       </div>
 
       <div class="share-input-group">
-        <input type="text" id="share-link-input" class="share-input" placeholder="Đang kết nối Cloudflare Tunnel...">
+        <input type="text" id="share-link-input" class="share-input" placeholder="Đang kết nối..." readonly>
         <button id="btn-copy-link" class="btn-secondary" type="button">
           📋 <span>Sao chép link</span>
         </button>
         <button id="btn-toggle-qr" class="btn-secondary" type="button">
-          📱 <span id="qr-btn-text">Xem Mã QR</span>
+          📱 <span id="qr-btn-text">Ẩn Mã QR</span>
         </button>
       </div>
 
-      <div id="tunnel-status" style="font-size: 0.85rem; color: #f59e0b; margin-top: 8px;">
-        ⏳ Đang khởi tạo link Cloudflare HTTPS (chờ khoảng 3-5 giây)...
+      <div id="tunnel-status" style="font-size: 0.85rem; color: #34d399; margin-top: 8px;">
+        ⚡ <strong>Hệ thống sẵn sàng!</strong> Quét mã QR bên dưới để mở trang Check-in.
       </div>
 
-      <div id="qr-box" class="qr-box">
+      <!-- MÃ QR LUÔN HIỆN SẴN -->
+      <div id="qr-box" class="qr-box show">
         <div class="qr-image-wrapper">
           <img id="qr-img" alt="Mã QR Check-in" src="">
         </div>
@@ -85,7 +86,16 @@
       const countBadge = document.getElementById('count-badge');
       const emptyRow = document.getElementById('empty-row');
 
+      const shareLinkInput = document.getElementById('share-link-input');
+      const btnCopyLink = document.getElementById('btn-copy-link');
+      const btnToggleQr = document.getElementById('btn-toggle-qr');
+      const qrBtnText = document.getElementById('qr-btn-text');
+      const qrBox = document.getElementById('qr-box');
+      const qrImg = document.getElementById('qr-img');
+      const tunnelStatus = document.getElementById('tunnel-status');
+
       let records = [];
+      let currentPublicUrl = null;
 
       function updateConnectionStatus(isConnected) {
         if (isConnected) {
@@ -122,7 +132,13 @@
         return ua.slice(0, 25) + '...';
       }
 
-      function createRow(record, isNew = false) {
+      function escapeHtml(str) {
+        return String(str || '').replace(/[&<>"']/g, function (m) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+        });
+      }
+
+      function createRow(record, isNew) {
         const tr = document.createElement('tr');
         if (isNew) tr.classList.add('new-row');
 
@@ -145,12 +161,6 @@
         return tr;
       }
 
-      function escapeHtml(str) {
-        return String(str).replace(/[&<>"']/g, function (m) {
-          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
-        });
-      }
-
       function renderAll() {
         while (tableBody.firstChild) {
           tableBody.removeChild(tableBody.firstChild);
@@ -164,6 +174,87 @@
         updateCounter();
       }
 
+      async function loadQRCode(url) {
+        if (!url || !url.startsWith('http')) return;
+        try {
+          const res = await fetch('/api/qr?url=' + encodeURIComponent(url));
+          const data = await res.json();
+          if (data && data.qr) {
+            qrImg.src = data.qr;
+            qrBox.classList.add('show');
+            qrBtnText.textContent = 'Ẩn Mã QR';
+          }
+        } catch (err) {
+          console.error('Lỗi tạo mã QR', err);
+        }
+      }
+
+      function setPublicUrl(url) {
+        if (!url) return;
+        currentPublicUrl = url;
+        shareLinkInput.value = url;
+        loadQRCode(url);
+      }
+
+      // Xác định ngay URL theo môi trường
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (!isLocal) {
+        // Đang chạy trên Render.com: lấy ngay domain https
+        setPublicUrl(window.location.origin + '/');
+        tunnelStatus.innerHTML = '⚡ <strong>Hệ thống Cloud 24/7 trực tuyến!</strong> Mã QR bên dưới đã sẵn sàng quét.';
+      } else {
+        // Đang chạy localhost
+        shareLinkInput.value = 'Đang khởi tạo link Cloudflare...';
+        tunnelStatus.innerHTML = '⏳ Đang khởi tạo link Cloudflare (chờ 3-5 giây)...';
+
+        const pollInterval = setInterval(async function () {
+          if (currentPublicUrl && !currentPublicUrl.includes('localhost')) {
+            clearInterval(pollInterval);
+            return;
+          }
+          try {
+            const res = await fetch('/api/public-url');
+            const data = await res.json();
+            if (data && data.url) {
+              setPublicUrl(data.url);
+              tunnelStatus.innerHTML = '⚡ <strong>Link Cloudflare đã sẵn sàng!</strong>';
+              clearInterval(pollInterval);
+            }
+          } catch (e) {}
+        }, 1500);
+      }
+
+      // Nút copy link
+      btnCopyLink.addEventListener('click', async function () {
+        const textToCopy = shareLinkInput.value.trim();
+        if (!textToCopy) return;
+
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+          const origHtml = btnCopyLink.innerHTML;
+          btnCopyLink.innerHTML = '✅ <span>Đã sao chép!</span>';
+          setTimeout(() => { btnCopyLink.innerHTML = origHtml; }, 2000);
+        } catch (err) {
+          shareLinkInput.select();
+          document.execCommand('copy');
+          alert('Đã sao chép link!');
+        }
+      });
+
+      // Nút ẩn/hiện mã QR
+      btnToggleQr.addEventListener('click', function () {
+        const isShown = qrBox.classList.contains('show');
+        if (isShown) {
+          qrBox.classList.remove('show');
+          qrBtnText.textContent = 'Xem Mã QR';
+        } else {
+          qrBox.classList.add('show');
+          qrBtnText.textContent = 'Ẩn Mã QR';
+          loadQRCode(currentPublicUrl || shareLinkInput.value || (window.location.origin + '/'));
+        }
+      });
+
+      // Kết nối SSE
       function connectSSE() {
         const eventSource = new EventSource('/api/sse/stream');
 
@@ -172,15 +263,17 @@
         };
 
         eventSource.addEventListener('init', function (e) {
+          updateConnectionStatus(true);
           try {
             records = JSON.parse(e.data);
             renderAll();
           } catch (err) {
-            console.error('Lỗi phân tích init data', err);
+            console.error('Lỗi parse init data', err);
           }
         });
 
         eventSource.addEventListener('location', function (e) {
+          updateConnectionStatus(true);
           try {
             const newRecord = JSON.parse(e.data);
             records.push(newRecord);
@@ -206,122 +299,19 @@
           }
         });
 
-      // --- Xử lý Chia Sẻ Link & Mã QR ---
-      const shareLinkInput = document.getElementById('share-link-input');
-      const btnCopyLink = document.getElementById('btn-copy-link');
-      const btnToggleQr = document.getElementById('btn-toggle-qr');
-      const qrBtnText = document.getElementById('qr-btn-text');
-      const qrBox = document.getElementById('qr-box');
-      const qrImg = document.getElementById('qr-img');
-      const tunnelStatus = document.getElementById('tunnel-status');
-
-      let currentPublicUrl = null;
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-      async function loadQRCode(url, autoShow = true) {
-        if (!url || !url.startsWith('http')) return;
-        try {
-          const res = await fetch('/api/qr?url=' + encodeURIComponent(url));
-          const data = await res.json();
-          if (data && data.qr) {
-            qrImg.src = data.qr;
-            if (autoShow) {
-              qrBox.classList.add('show');
-              qrBtnText.textContent = 'Ẩn Mã QR';
-            }
-          }
-        } catch (err) {
-          console.error('Không thể tạo mã QR', err);
-        }
-      }
-
-      function onPublicUrlReady(url) {
-        if (!url || currentPublicUrl === url) return;
-        currentPublicUrl = url;
-        shareLinkInput.value = url;
-        tunnelStatus.innerHTML = '⚡ <strong>Link sẵn sàng!</strong> Quét mã QR bên dưới hoặc gửi link cho bạn bè.';
-        tunnelStatus.style.color = '#34d399';
-        loadQRCode(url, true);
-      }
-
-      if (!isLocal) {
-        // Đang chạy trên Cloud (Render.com): Đường link chính là domain hiện tại
-        currentPublicUrl = window.location.origin + '/';
-        shareLinkInput.value = currentPublicUrl;
-        tunnelStatus.innerHTML = '⚡ <strong>Hệ thống Cloud 24/7 trực tuyến!</strong> Mã QR bên dưới đã sẵn sàng quét.';
-        tunnelStatus.style.color = '#34d399';
-        loadQRCode(currentPublicUrl, true);
-      } else {
-        // Đang chạy Localhost: Chờ Cloudflare tạo link
-        shareLinkInput.value = 'Đang khởi tạo link Cloudflare...';
-
-        // Lắng nghe sự kiện SSE khi Cloudflare tunnel khởi tạo xong
         eventSource.addEventListener('public-url', function (e) {
           try {
             const data = JSON.parse(e.data);
             if (data && data.url) {
-              onPublicUrlReady(data.url);
+              setPublicUrl(data.url);
             }
           } catch (err) {}
         });
 
-        // Polling liên tục mỗi 1.5 giây cho đến khi nhận được link Cloudflare
-        const pollInterval = setInterval(async function () {
-          if (currentPublicUrl) {
-            clearInterval(pollInterval);
-            return;
-          }
-          try {
-            const res = await fetch('/api/public-url');
-            const data = await res.json();
-            if (data && data.url) {
-              onPublicUrlReady(data.url);
-              clearInterval(pollInterval);
-            }
-          } catch (e) {}
-        }, 1500);
+        eventSource.onerror = function () {
+          updateConnectionStatus(false);
+        };
       }
-
-      // Nút sao chép link
-      btnCopyLink.addEventListener('click', async function () {
-        const textToCopy = shareLinkInput.value.trim();
-        if (!textToCopy || textToCopy.includes('Đang khởi tạo')) {
-          alert('Vui lòng đợi vài giây để hệ thống tạo xong link HTTPS!');
-          return;
-        }
-
-        try {
-          await navigator.clipboard.writeText(textToCopy);
-          const origHtml = btnCopyLink.innerHTML;
-          btnCopyLink.innerHTML = '✅ <span>Đã sao chép!</span>';
-          setTimeout(() => {
-            btnCopyLink.innerHTML = origHtml;
-          }, 2000);
-        } catch (err) {
-          shareLinkInput.select();
-          document.execCommand('copy');
-          alert('Đã sao chép liên kết vào bộ nhớ tạm!');
-        }
-      });
-
-      // Nút bật/tắt hiển thị mã QR
-      btnToggleQr.addEventListener('click', function () {
-        const targetUrl = currentPublicUrl || shareLinkInput.value.trim() || (window.location.origin + '/');
-        const isShown = qrBox.classList.contains('show');
-        if (isShown) {
-          qrBox.classList.remove('show');
-          qrBtnText.textContent = 'Xem Mã QR';
-        } else {
-          qrBox.classList.add('show');
-          qrBtnText.textContent = 'Ẩn Mã QR';
-          loadQRCode(targetUrl, true);
-        }
-      });
-
-      // Khi người dùng thay đổi link (ví dụ paste link ngrok vào)
-      shareLinkInput.addEventListener('input', function () {
-        loadQRCode(shareLinkInput.value.trim(), true);
-      });
 
       connectSSE();
     })();
